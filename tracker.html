@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Currency Personal Finance & Asset Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background-color: #f8fafc; color: #0f172a; }
+    .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 600; }
+  </style>
+</head>
+<body class="p-4 md:p-8 max-w-7xl mx-auto">
+
+  <!-- Header & Currency Controls -->
+  <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-800">Multi-Currency Finance & Asset Tracker</h1>
+      <p class="text-sm text-slate-500">Spending, Stocks, Private Startups, Mutual Funds, Bonds & Pensions</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <label class="text-sm font-medium text-slate-600">Display Currency:</label>
+      <select id="baseCurrency" onchange="renderAll()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-semibold bg-slate-50">
+        <option value="USD">USD ($)</option>
+        <option value="EUR">EUR (€)</option>
+        <option value="GHS">GHS (₵)</option>
+        <option value="HUF">HUF (Ft)</option>
+      </select>
+      <button onclick="toggleFxModal()" class="bg-slate-800 hover:bg-slate-700 text-white text-sm px-3 py-1.5 rounded-lg transition">
+        FX Rates & Converter
+      </button>
+    </div>
+  </header>
+
+  <!-- Summary Cards -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Spending</p>
+      <p id="totalSpendingDisplay" class="text-xl font-bold text-rose-600 mt-1">$0.00</p>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Stocks & Equities</p>
+      <p id="totalStocksDisplay" class="text-xl font-bold text-emerald-600 mt-1">$0.00</p>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">MM, Bonds & Funds</p>
+      <p id="totalFundsDisplay" class="text-xl font-bold text-indigo-600 mt-1">$0.00</p>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Startups & Clubs</p>
+      <p id="totalStartupsDisplay" class="text-xl font-bold text-purple-600 mt-1">$0.00</p>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Pensions</p>
+      <p id="totalPensionsDisplay" class="text-xl font-bold text-blue-600 mt-1">$0.00</p>
+    </div>
+  </section>
+
+  <!-- FX Rates & Quick Converter Panel -->
+  <section id="fxPanel" class="hidden bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-lg font-bold text-slate-800">Exchange Rates (Base: 1 USD) & Quick Converter</h2>
+      <button onclick="toggleFxModal()" class="text-slate-400 hover:text-slate-600 text-sm">Close</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-600 mb-2">Edit Exchange Rates (vs 1 USD)</h3>
+        <div class="grid grid-cols-2 gap-3 text-sm">
+          <div><label class="block text-slate-500">USD ($)</label><input type="number" step="any" value="1" disabled class="w-full border rounded px-2 py-1 bg-slate-100" /></div>
+          <div><label class="block text-slate-500">EUR (€)</label><input type="number" step="any" id="rate_EUR" onchange="updateRates()" class="w-full border rounded px-2 py-1" /></div>
+          <div><label class="block text-slate-500">GHS (₵)</label><input type="number" step="any" id="rate_GHS" onchange="updateRates()" class="w-full border rounded px-2 py-1" /></div>
+          <div><label class="block text-slate-500">HUF (Ft)</label><input type="number" step="any" id="rate_HUF" onchange="updateRates()" class="w-full border rounded px-2 py-1" /></div>
+        </div>
+      </div>
+      <div class="bg-slate-50 p-4 rounded-lg border border-slate-200">
+        <h3 class="text-sm font-semibold text-slate-600 mb-2">Quick Currency Converter</h3>
+        <div class="flex flex-wrap gap-2 items-center">
+          <input type="number" id="convAmount" value="100" oninput="runConverter()" class="border rounded px-2 py-1.5 w-28 text-sm" />
+          <select id="convFrom" onchange="runConverter()" class="border rounded px-2 py-1.5 text-sm"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
+          <span class="text-sm text-slate-500">to</span>
+          <select id="convTo" onchange="runConverter()" class="border rounded px-2 py-1.5 text-sm"><option value="GHS">GHS</option><option value="HUF">HUF</option><option value="EUR">EUR</option><option value="USD">USD</option></select>
+        </div>
+        <p id="convResult" class="mt-3 text-lg font-bold text-slate-800"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Navigation Tabs -->
+  <nav class="flex flex-wrap gap-6 border-b border-slate-200 mb-6 text-sm font-medium">
+    <button id="tab-spending" onclick="switchTab('spending')" class="pb-3 tab-active">Spending</button>
+    <button id="tab-stocks" onclick="switchTab('stocks')" class="pb-3 text-slate-500">Stocks & Forecast</button>
+    <button id="tab-funds" onclick="switchTab('funds')" class="pb-3 text-slate-500">MM, Bonds & Mutual Funds</button>
+    <button id="tab-startups" onclick="switchTab('startups')" class="pb-3 text-slate-500">Startups & Clubs</button>
+    <button id="tab-pensions" onclick="switchTab('pensions')" class="pb-3 text-slate-500">Pensions</button>
+  </nav>
+
+  <!-- SPENDING SECTION -->
+  <section id="sec-spending" class="space-y-4">
+    <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="downloadTemplate('spending', 'xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Excel Template</button>
+        <button onclick="downloadTemplate('spending', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">CSV Template</button>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
+          Upload Spending <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'spending')" class="hidden" />
+        </label>
+      </div>
+      <button onclick="clearSection('spending')" class="text-xs text-rose-600 hover:underline">Clear Spending</button>
+    </div>
+    <form onsubmit="addSpending(event)" class="grid grid-cols-2 md:grid-cols-6 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
+      <input type="date" id="spDate" required class="border rounded px-2 py-1.5" />
+      <input type="text" id="spDesc" placeholder="Description" required class="border rounded px-2 py-1.5" />
+      <input type="text" id="spCat" placeholder="Category" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="spAmt" placeholder="Amount" required class="border rounded px-2 py-1.5" />
+      <select id="spCurr" class="border rounded px-2 py-1.5"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
+      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Add Expense</button>
+    </form>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+          <tr><th class="p-3">Date</th><th class="p-3">Description</th><th class="p-3">Category</th><th class="p-3">Original Amount</th><th class="p-3">Converted</th><th class="p-3"></th></tr>
+        </thead>
+        <tbody id="spendingTable" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- STOCKS & FORECAST SECTION -->
+  <section id="sec-stocks" class="hidden space-y-6">
+    <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="downloadTemplate('stocks', 'xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Stocks Excel Template</button>
+        <button onclick="downloadTemplate('stocks', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Stocks CSV Template</button>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
+          Upload Stocks <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'stocks')" class="hidden" />
+        </label>
+      </div>
+      <button onclick="clearSection('stocks')" class="text-xs text-rose-600 hover:underline">Clear Stocks</button>
+    </div>
+    <form onsubmit="addStock(event)" class="grid grid-cols-2 md:grid-cols-7 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
+      <input type="text" id="stSym" placeholder="Symbol (AAPL)" required class="border rounded px-2 py-1.5" />
+      <input type="text" id="stName" placeholder="Asset Name" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="stShares" placeholder="Shares" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="stBuy" placeholder="Buy Price" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="stCurrPrice" placeholder="Current Price" required class="border rounded px-2 py-1.5" />
+      <select id="stCurr" class="border rounded px-2 py-1.5"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
+      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Add Stock</button>
+    </form>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+          <tr><th class="p-3">Symbol</th><th class="p-3">Name</th><th class="p-3">Shares</th><th class="p-3">Buy Price</th><th class="p-3">Current Price</th><th class="p-3">Total Value</th><th class="p-3">Gain/Loss</th><th class="p-3"></th></tr>
+        </thead>
+        <tbody id="stocksTable" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+
+    <!-- Time-Series & Forecasting Engine -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-100 pb-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-800">Time-Series Predictive Engine (CAGR & Monte Carlo)</h2>
+          <p class="text-xs text-slate-500">Upload historical prices (Date, Symbol, Price, Currency) for accurate annualized returns and volatility.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="downloadTemplate('history', 'xlsx')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded-lg font-medium">History Excel Template</button>
+          <button onclick="downloadTemplate('history', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">History CSV Template</button>
+          <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
+            Upload Price History <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'history')" class="hidden" />
+          </label>
+          <button onclick="clearSection('history')" class="text-xs text-rose-600 hover:underline">Clear History</button>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm">
+        <div class="flex items-center gap-2"><label class="font-medium text-slate-600">Horizon (Years):</label><input type="number" id="forecastYears" value="10" min="1" max="50" onchange="renderForecast()" class="border rounded px-2 py-1 w-20 bg-white" /></div>
+        <div class="flex items-center gap-2"><label class="font-medium text-slate-600">Fallback Return (%):</label><input type="number" step="0.5" id="fallbackReturn" value="8" onchange="renderForecast()" class="border rounded px-2 py-1 w-20 bg-white" /></div>
+        <div class="flex items-center gap-2"><label class="font-medium text-slate-600">Fallback Volatility (%):</label><input type="number" step="0.5" id="fallbackVol" value="15" onchange="renderForecast()" class="border rounded px-2 py-1 w-20 bg-white" /></div>
+      </div>
+      <div id="portfolioForecastSummary" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"></div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+            <tr><th class="p-3">Symbol</th><th class="p-3">Source</th><th class="p-3">Hist. CAGR ($\mu$)</th><th class="p-3">Volatility ($\sigma$)</th><th class="p-3">Mean Projection</th><th class="p-3">Conservative (P10)</th><th class="p-3">Median (P50)</th><th class="p-3">Optimistic (P90)</th></tr>
+          </thead>
+          <tbody id="forecastTable" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- MM, BONDS & MUTUAL FUNDS SECTION -->
+  <section id="sec-funds" class="hidden space-y-4">
+    <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="downloadTemplate('funds', 'xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Funds Excel Template</button>
+        <button onclick="downloadTemplate('funds', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Funds CSV Template</button>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
+          Upload Funds/Bonds <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'funds')" class="hidden" />
+        </label>
+      </div>
+      <button onclick="clearSection('funds')" class="text-xs text-rose-600 hover:underline">Clear Funds</button>
+    </div>
+    <form onsubmit="addFund(event)" class="grid grid-cols-2 md:grid-cols-7 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
+      <input type="text" id="fdName" placeholder="Fund / Bond Name" required class="border rounded px-2 py-1.5" />
+      <select id="fdType" class="border rounded px-2 py-1.5"><option value="Money Market">Money Market</option><option value="Bond">Bond / Debt</option><option value="Mutual Fund">Mutual Fund (NAV)</option></select>
+      <input type="number" step="any" id="fdUnits" placeholder="Units / Shares" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="fdNav" placeholder="Current NAV / Price" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="fdYield" placeholder="Est. Yield / Coupon %" required class="border rounded px-2 py-1.5" />
+      <select id="fdCurr" class="border rounded px-2 py-1.5"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
+      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Add Instrument</button>
+    </form>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+          <tr><th class="p-3">Name</th><th class="p-3">Type</th><th class="p-3">Units</th><th class="p-3">NAV / Price</th><th class="p-3">Est. Yield</th><th class="p-3">Total Value</th><th class="p-3"></th></tr>
+        </thead>
+        <tbody id="fundsTable" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- STARTUPS & INVESTMENT CLUBS SECTION -->
+  <section id="sec-startups" class="hidden space-y-4">
+    <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="downloadTemplate('startups', 'xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Startups Excel Template</button>
+        <button onclick="downloadTemplate('startups', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Startups CSV Template</button>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
+          Upload Startups <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'startups')" class="hidden" />
+        </label>
+      </div>
+      <button onclick="clearSection('startups')" class="text-xs text-rose-600 hover:underline">Clear Startups</button>
+    </div>
+    <form onsubmit="addStartup(event)" class="grid grid-cols-2 md:grid-cols-7 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
+      <input type="text" id="suName" placeholder="Startup / Club Name" required class="border rounded px-2 py-1.5" />
+      <input type="text" id="suStage" placeholder="Stage (Seed / Club)" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="suShares" placeholder="Shares / Stake Units" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="suCost" placeholder="Cost Basis / Share" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="suVal" placeholder="Current Est. Value / Share" required class="border rounded px-2 py-1.5" />
+      <select id="suCurr" class="border rounded px-2 py-1.5"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
+      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Add Startup</button>
+    </form>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+          <tr><th class="p-3">Entity Name</th><th class="p-3">Stage / Type</th><th class="p-3">Units Held</th><th class="p-3">Cost Basis</th><th class="p-3">Current Valuation</th><th class="p-3">Total Worth</th><th class="p-3">Unrealized Gain</th><th class="p-3"></th></tr>
+        </thead>
+        <tbody id="startupsTable" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PENSIONS SECTION -->
+  <section id="sec-pensions" class="hidden space-y-4">
+    <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="downloadTemplate('pensions', 'xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Pensions Excel Template</button>
+        <button onclick="downloadTemplate('pensions', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Pensions CSV Template</button>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
+          Upload Pensions <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'pensions')" class="hidden" />
+        </label>
+      </div>
+      <button onclick="clearSection('pensions')" class="text-xs text-rose-600 hover:underline">Clear Pensions</button>
+    </div>
+    <form onsubmit="addPension(event)" class="grid grid-cols-2 md:grid-cols-9 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
+      <input type="text" id="penName" placeholder="Plan Name" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="penBal" placeholder="Balance" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="penContrib" placeholder="Monthly Contrib" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="penMatch" placeholder="Match %" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="penGrowth" placeholder="Growth %" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="penFee" placeholder="Fee %" required class="border rounded px-2 py-1.5" />
+      <input type="number" id="penYears" placeholder="Years" required class="border rounded px-2 py-1.5" />
+      <select id="penCurr" class="border rounded px-2 py-1.5"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
+      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Add Plan</button>
+    </form>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+          <tr><th class="p-3">Plan</th><th class="p-3">Current Balance</th><th class="p-3">Monthly + Match</th><th class="p-3">Net Growth</th><th class="p-3">Years</th><th class="p-3">Projected Value</th><th class="p-3"></th></tr>
+        </thead>
+        <tbody id="pensionsTable" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <script>
+    let fxRates = JSON.parse(localStorage.getItem('fxRates')) || { USD: 1, EUR: 0.92, GHS: 15.80, HUF: 375.00 };
+    let state = JSON.parse(localStorage.getItem('financeTrackerState')) || { spending: [], stocks: [], funds: [], startups: [], pensions: [], history: [] };
+    ['spending', 'stocks', 'funds', 'startups', 'pensions', 'history'].forEach(k => { if (!state[k]) state[k] = []; });
+
+    const symbols = { USD: '$', EUR: '€', GHS: '₵', HUF: 'Ft ' };
+
+    function saveState() {
+      localStorage.setItem('financeTrackerState', JSON.stringify(state));
+      localStorage.setItem('fxRates', JSON.stringify(fxRates));
+    }
+
+    function convert(amount, fromCurr, toCurr) {
+      const fromRate = fxRates[fromCurr] || 1;
+      const toRate = fxRates[toCurr] || 1;
+      return (Number(amount) / fromRate) * toRate;
+    }
+
+    function formatMoney(amount, curr) {
+      return `${symbols[curr] || ''}${Number(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    function toggleFxModal() {
+      document.getElementById('fxPanel').classList.toggle('hidden');
+      document.getElementById('rate_EUR').value = fxRates.EUR;
+      document.getElementById('rate_GHS').value = fxRates.GHS;
+      document.getElementById('rate_HUF').value = fxRates.HUF;
+      runConverter();
+    }
+
+    function updateRates() {
+      fxRates.EUR = parseFloat(document.getElementById('rate_EUR').value) || 0.92;
+      fxRates.GHS = parseFloat(document.getElementById('rate_GHS').value) || 15.80;
+      fxRates.HUF = parseFloat(document.getElementById('rate_HUF').value) || 375.00;
+      saveState(); runConverter(); renderAll();
+    }
+
+    function runConverter() {
+      const amt = parseFloat(document.getElementById('convAmount').value) || 0;
+      const res = convert(amt, document.getElementById('convFrom').value, document.getElementById('convTo').value);
+      document.getElementById('convResult').textContent = `${formatMoney(amt, document.getElementById('convFrom').value)} = ${formatMoney(res, document.getElementById('convTo').value)}`;
+    }
+
+    function switchTab(tab) {
+      ['spending', 'stocks', 'funds', 'startups', 'pensions'].forEach(t => {
+        document.getElementById(`sec-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tab-${t}`);
+        btn.classList.toggle('tab-active', t === tab);
+        btn.classList.toggle('text-slate-500', t !== tab);
+      });
+    }
+
+    function addSpending(e) {
+      e.preventDefault();
+      state.spending.push({ Date: document.getElementById('spDate').value, Description: document.getElementById('spDesc').value, Category: document.getElementById('spCat').value, Amount: parseFloat(document.getElementById('spAmt').value), Currency: document.getElementById('spCurr').value });
+      e.target.reset(); saveState(); renderAll();
+    }
+
+    function addStock(e) {
+      e.preventDefault();
+      state.stocks.push({ Symbol: document.getElementById('stSym').value.trim().toUpperCase(), Name: document.getElementById('stName').value, Shares: parseFloat(document.getElementById('stShares').value), BuyPrice: parseFloat(document.getElementById('stBuy').value), CurrentPrice: parseFloat(document.getElementById('stCurrPrice').value), Currency: document.getElementById('stCurr').value });
+      e.target.reset(); saveState(); renderAll();
+    }
+
+    function addFund(e) {
+      e.preventDefault();
+      state.funds.push({ Name: document.getElementById('fdName').value, Type: document.getElementById('fdType').value, Units: parseFloat(document.getElementById('fdUnits').value), Nav: parseFloat(document.getElementById('fdNav').value), Yield: parseFloat(document.getElementById('fdYield').value), Currency: document.getElementById('fdCurr').value });
+      e.target.reset(); saveState(); renderAll();
+    }
+
+    function addStartup(e) {
+      e.preventDefault();
+      state.startups.push({ Name: document.getElementById('suName').value, Stage: document.getElementById('suStage').value, Shares: parseFloat(document.getElementById('suShares').value), CostBasis: parseFloat(document.getElementById('suCost').value), CurrentValuation: parseFloat(document.getElementById('suVal').value), Currency: document.getElementById('suCurr').value });
+      e.target.reset(); saveState(); renderAll();
+    }
+
+    function addPension(e) {
+      e.preventDefault();
+      state.pensions.push({ Name: document.getElementById('penName').value, Balance: parseFloat(document.getElementById('penBal').value), MonthlyContribution: parseFloat(document.getElementById('penContrib').value), EmployerMatch: parseFloat(document.getElementById('penMatch').value), GrowthRate: parseFloat(document.getElementById('penGrowth').value), AnnualFee: parseFloat(document.getElementById('penFee').value), YearsToRetire: parseInt(document.getElementById('penYears').value), Currency: document.getElementById('penCurr').value });
+      e.target.reset(); saveState(); renderAll();
+    }
+
+    function deleteItem(section, index) { state[section].splice(index, 1); saveState(); renderAll(); }
+    function clearSection(section) { if (confirm(`Clear all ${section} entries?`)) { state[section] = []; saveState(); renderAll(); } }
+
+    function downloadTemplate(section, format) {
+      const templates = {
+        spending: [{ Date: '2026-11-14', Description: 'Groceries', Category: 'Food', Amount: 85.50, Currency: 'USD' }],
+        stocks: [{ Symbol: 'VOO', Name: 'Vanguard S&P 500', Shares: 10, BuyPrice: 450, CurrentPrice: 510, Currency: 'USD' }],
+        funds: [{ Name: 'Vanguard US Gov Money Market', Type: 'Money Market', Units: 1500, Nav: 1.00, Yield: 4.8, Currency: 'USD' }],
+        startups: [{ Name: 'TechSeed Ventures', Stage: 'Seed', Shares: 5000, CostBasis: 1.20, CurrentValuation: 2.50, Currency: 'USD' }],
+        pensions: [{ Name: 'Workplace Pension', Balance: 25000, MonthlyContribution: 400, EmployerMatch: 50, GrowthRate: 7, AnnualFee: 0.5, YearsToRetire: 25, Currency: 'EUR' }],
+        history: [{ Date: '2025-01-01', Symbol: 'VOO', Price: 538.80, Currency: 'USD' }, { Date: '2026-01-01', Symbol: 'VOO', Price: 605.40, Currency: 'USD' }]
+      };
+      const ws = XLSX.utils.json_to_sheet(templates[section]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, section.toUpperCase());
+      XLSX.writeFile(wb, `${section}_template.${format}`);
+    }
+
+    function normalizeDate(val) {
+      if (typeof val === 'number') {
+        const utcDays = Math.floor(val - 25569);
+        return new Date(utcDays * 86400 * 1000).toISOString().split('T')[0];
+      }
+      return String(val || '').trim();
+    }
+
+    function handleUpload(event, section) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+        rows.forEach(row => {
+          if (!row.Currency || !fxRates[String(row.Currency).toUpperCase()]) row.Currency = 'USD';
+          else row.Currency = String(row.Currency).toUpperCase();
+          if (row.Symbol) row.Symbol = String(row.Symbol).trim().toUpperCase();
+          if (row.Date) row.Date = normalizeDate(row.Date);
+          state[section].push(row);
+        });
+        saveState(); renderAll(); event.target.value = '';
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function getTimeSeriesStats(symbol) {
+      const series = state.history.filter(h => h.Symbol === symbol && h.Date && Number(h.Price) > 0).map(h => ({ date: new Date(h.Date), price: Number(h.Price) })).filter(h => !isNaN(h.date.getTime())).sort((a, b) => a.date - b.date);
+      if (series.length < 2) return null;
+      const totalYears = (series[series.length - 1].date - series[0].date) / (1000 * 60 * 60 * 24 * 365.25);
+      if (totalYears <= 0) return null;
+      const cagr = Math.pow(series[series.length - 1].price / series[0].price, 1 / totalYears) - 1;
+      return { points: series.length, cagr, volatility: 0.15 };
+    }
+
+    function randNormal() {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+
+    function simulateAsset(startVal, mu, sigma, years, paths = 500) {
+      const results = [];
+      const drift = (mu - 0.5 * sigma * sigma) * years;
+      const shockScale = sigma * Math.sqrt(years);
+      for (let i = 0; i < paths; i++) {
+        results.push(startVal * Math.exp(drift + shockScale * randNormal()));
+      }
+      results.sort((a, b) => a - b);
+      return { meanAvg: startVal * Math.pow(1 + mu, years), p10: results[Math.floor(paths * 0.10)], p50: results[Math.floor(paths * 0.50)], p90: results[Math.floor(paths * 0.90)] };
+    }
+
+    function renderForecast() {
+      const base = document.getElementById('baseCurrency').value;
+      const years = parseFloat(document.getElementById('forecastYears').value) || 10;
+      const fallbackMu = (parseFloat(document.getElementById('fallbackReturn').value) || 8) / 100;
+      const fallbackSigma = (parseFloat(document.getElementById('fallbackVol').value) || 15) / 100;
+      const tbody = document.getElementById('forecastTable');
+      tbody.innerHTML = '';
+
+      let aggMean = 0, aggP10 = 0, aggP50 = 0, aggP90 = 0;
+      state.stocks.forEach(item => {
+        const sym = (item.Symbol || '').toUpperCase();
+        const valBase = convert(Number(item.Shares) * Number(item.CurrentPrice), item.Currency || 'USD', base);
+        const stats = getTimeSeriesStats(sym);
+        const mu = stats ? stats.cagr : fallbackMu;
+        const sigma = stats ? stats.volatility : fallbackSigma;
+        const sim = simulateAsset(valBase, mu, sigma, years, 500);
+        aggMean += sim.meanAvg; aggP10 += sim.p10; aggP50 += sim.p50; aggP90 += sim.p90;
+
+        tbody.innerHTML += `
+          <tr>
+            <td class="p-3 font-bold">${sym}</td>
+            <td class="p-3">${stats ? `<span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-xs">${stats.points} pts</span>` : '<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs">Fallback</span>'}</td>
+            <td class="p-3 font-medium ${mu >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${(mu * 100).toFixed(2)}%</td>
+            <td class="p-3 text-slate-600">${(sigma * 100).toFixed(2)}%</td>
+            <td class="p-3 font-semibold">${formatMoney(sim.meanAvg, base)}</td>
+            <td class="p-3 text-amber-700">${formatMoney(sim.p10, base)}</td>
+            <td class="p-3 font-semibold text-blue-600">${formatMoney(sim.p50, base)}</td>
+            <td class="p-3 text-emerald-700">${formatMoney(sim.p90, base)}</td>
+          </tr>`;
+      });
+
+      document.getElementById('portfolioForecastSummary').innerHTML = `
+        <div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><p class="text-xs text-slate-500">Mean (${years}y)</p><p class="text-base font-bold text-slate-800">${formatMoney(aggMean, base)}</p></div>
+        <div class="bg-amber-50 p-3 rounded-lg border border-amber-200"><p class="text-xs text-amber-700">Conservative P10</p><p class="text-base font-bold text-amber-800">${formatMoney(aggP10, base)}</p></div>
+        <div class="bg-blue-50 p-3 rounded-lg border border-blue-200"><p class="text-xs text-blue-700">Median P50</p><p class="text-base font-bold text-blue-800">${formatMoney(aggP50, base)}</p></div>
+        <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200"><p class="text-xs text-emerald-700">Optimistic P90</p><p class="text-base font-bold text-emerald-800">${formatMoney(aggP90, base)}</p></div>`;
+    }
+
+    function renderAll() {
+      const base = document.getElementById('baseCurrency').value;
+
+      // Spending
+      let totalSp = 0;
+      const spBody = document.getElementById('spendingTable'); spBody.innerHTML = '';
+      state.spending.forEach((item, idx) => {
+        const conv = convert(item.Amount, item.Currency || 'USD', base); totalSp += conv;
+        spBody.innerHTML += `<tr><td class="p-3">${item.Date}</td><td class="p-3 font-medium">${item.Description}</td><td class="p-3"><span class="bg-slate-100 px-2 py-0.5 rounded text-xs">${item.Category}</span></td><td class="p-3">${formatMoney(item.Amount, item.Currency)}</td><td class="p-3 font-semibold">${formatMoney(conv, base)}</td><td class="p-3 text-right"><button onclick="deleteItem('spending', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
+      });
+      document.getElementById('totalSpendingDisplay').textContent = formatMoney(totalSp, base);
+
+      // Stocks
+      let totalStocks = 0;
+      const stBody = document.getElementById('stocksTable'); stBody.innerHTML = '';
+      state.stocks.forEach((item, idx) => {
+        const valOrig = Number(item.Shares) * Number(item.CurrentPrice);
+        const gainConv = convert(valOrig - (Number(item.Shares) * Number(item.BuyPrice)), item.Currency, base);
+        const valConv = convert(valOrig, item.Currency, base); totalStocks += valConv;
+        stBody.innerHTML += `<tr><td class="p-3 font-bold">${item.Symbol}</td><td class="p-3">${item.Name}</td><td class="p-3">${item.Shares}</td><td class="p-3">${formatMoney(item.BuyPrice, item.Currency)}</td><td class="p-3">${formatMoney(item.CurrentPrice, item.Currency)}</td><td class="p-3 font-semibold">${formatMoney(valConv, base)}</td><td class="p-3 font-semibold ${gainConv >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${gainConv >= 0 ? '+' : ''}${formatMoney(gainConv, base)}</td><td class="p-3 text-right"><button onclick="deleteItem('stocks', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
+      });
+      document.getElementById('totalStocksDisplay').textContent = formatMoney(totalStocks, base);
+
+      // Funds & Bonds
+      let totalFunds = 0;
+      const fdBody = document.getElementById('fundsTable'); fdBody.innerHTML = '';
+      state.funds.forEach((item, idx) => {
+        const valConv = convert(Number(item.Units) * Number(item.Nav), item.Currency, base); totalFunds += valConv;
+        fdBody.innerHTML += `<tr><td class="p-3 font-medium">${item.Name}</td><td class="p-3"><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs">${item.Type}</span></td><td class="p-3">${item.Units}</td><td class="p-3">${formatMoney(item.Nav, item.Currency)}</td><td class="p-3 text-emerald-600">${item.Yield}%</td><td class="p-3 font-semibold">${formatMoney(valConv, base)}</td><td class="p-3 text-right"><button onclick="deleteItem('funds', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
+      });
+      document.getElementById('totalFundsDisplay').textContent = formatMoney(totalFunds, base);
+
+      // Startups & Clubs
+      let totalStartups = 0;
+      const suBody = document.getElementById('startupsTable'); suBody.innerHTML = '';
+      state.startups.forEach((item, idx) => {
+        const valOrig = Number(item.Shares) * Number(item.CurrentValuation);
+        const valConv = convert(valOrig, item.Currency, base);
+        const gainConv = convert(valOrig - (Number(item.Shares) * Number(item.CostBasis)), item.Currency, base);
+        totalStartups += valConv;
+        suBody.innerHTML += `<tr><td class="p-3 font-bold">${item.Name}</td><td class="p-3"><span class="bg-purple-50 text-purple-700 px-2 py-0.5 rounded text-xs">${item.Stage}</span></td><td class="p-3">${item.Shares}</td><td class="p-3">${formatMoney(item.CostBasis, item.Currency)}</td><td class="p-3">${formatMoney(item.CurrentValuation, item.Currency)}</td><td class="p-3 font-semibold">${formatMoney(valConv, base)}</td><td class="p-3 font-semibold ${gainConv >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${gainConv >= 0 ? '+' : ''}${formatMoney(gainConv, base)}</td><td class="p-3 text-right"><button onclick="deleteItem('startups', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
+      });
+      document.getElementById('totalStartupsDisplay').textContent = formatMoney(totalStartups, base);
+
+      // Pensions
+      let totalPen = 0;
+      const penBody = document.getElementById('pensionsTable'); penBody.innerHTML = '';
+      state.pensions.forEach((item, idx) => {
+        const bal = Number(item.Balance) || 0;
+        const monthly = (Number(item.MonthlyContribution) || 0) * (1 + (Number(item.EmployerMatch) || 0) / 100);
+        const netRate = ((Number(item.GrowthRate) || 0) - (Number(item.AnnualFee) || 0)) / 100;
+        const years = Number(item.YearsToRetire) || 0;
+        let projOrig = bal * Math.pow(1 + netRate, years);
+        if (netRate !== 0) projOrig += (monthly * 12) * ((Math.pow(1 + netRate, years) - 1) / netRate);
+        else projOrig += monthly * 12 * years;
+        const balConv = convert(bal, item.Currency, base); totalPen += balConv;
+        penBody.innerHTML += `<tr><td class="p-3 font-medium">${item.Name}</td><td class="p-3">${formatMoney(bal, item.Currency)} (${formatMoney(balConv, base)})</td><td class="p-3">${formatMoney(monthly, item.Currency)}/mo</td><td class="p-3">${(netRate * 100).toFixed(2)}%</td><td class="p-3">${years} yrs</td><td class="p-3 font-semibold text-blue-600">${formatMoney(convert(projOrig, item.Currency, base), base)}</td><td class="p-3 text-right"><button onclick="deleteItem('pensions', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
+      });
+      document.getElementById('totalPensionsDisplay').textContent = formatMoney(totalPen, base);
+
+      renderForecast();
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
