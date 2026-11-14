@@ -6,6 +6,7 @@
   <title>Multi-Currency Personal Finance & Asset Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; background-color: #f8fafc; color: #0f172a; }
     .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 600; }
@@ -17,7 +18,7 @@
   <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
     <div>
       <h1 class="text-2xl font-bold text-slate-800">Multi-Currency Finance & Asset Tracker</h1>
-      <p class="text-sm text-slate-500">Spending, Stocks, Private Startups, Mutual Funds, Bonds & Pensions</p>
+      <p class="text-sm text-slate-500">Spending, Top Stocks, Realized Gains, Funds, Startups, Pensions & Visual Charts</p>
     </div>
     <div class="flex flex-wrap items-center gap-3">
       <label class="text-sm font-medium text-slate-600">Display Currency:</label>
@@ -34,14 +35,18 @@
   </header>
 
   <!-- Summary Cards -->
-  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
       <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Spending</p>
       <p id="totalSpendingDisplay" class="text-xl font-bold text-rose-600 mt-1">$0.00</p>
     </div>
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Stocks & Equities</p>
+      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Active Stocks</p>
       <p id="totalStocksDisplay" class="text-xl font-bold text-emerald-600 mt-1">$0.00</p>
+    </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Realized Gains (Sold)</p>
+      <p id="totalRealizedDisplay" class="text-xl font-bold text-amber-600 mt-1">$0.00</p>
     </div>
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
       <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">MM, Bonds & Funds</p>
@@ -90,6 +95,7 @@
   <nav class="flex flex-wrap gap-6 border-b border-slate-200 mb-6 text-sm font-medium">
     <button id="tab-spending" onclick="switchTab('spending')" class="pb-3 tab-active">Spending</button>
     <button id="tab-stocks" onclick="switchTab('stocks')" class="pb-3 text-slate-500">Stocks & Forecast</button>
+    <button id="tab-sold" onclick="switchTab('sold')" class="pb-3 text-slate-500">Stocks Sold & Realized</button>
     <button id="tab-funds" onclick="switchTab('funds')" class="pb-3 text-slate-500">MM, Bonds & Mutual Funds</button>
     <button id="tab-startups" onclick="switchTab('startups')" class="pb-3 text-slate-500">Startups & Clubs</button>
     <button id="tab-pensions" onclick="switchTab('pensions')" class="pb-3 text-slate-500">Pensions</button>
@@ -125,14 +131,14 @@
     </div>
   </section>
 
-  <!-- STOCKS & FORECAST SECTION -->
+  <!-- STOCKS & FORECAST SECTION (Displays Top 5 Holdings) -->
   <section id="sec-stocks" class="hidden space-y-6">
     <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
       <div class="flex flex-wrap gap-2">
         <button onclick="downloadTemplate('stocks', 'xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Stocks Excel Template</button>
         <button onclick="downloadTemplate('stocks', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Stocks CSV Template</button>
         <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
-          Upload Stocks <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'stocks')" class="hidden" />
+          Upload Stocks (DCA Batches) <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'stocks')" class="hidden" />
         </label>
       </div>
       <button onclick="clearSection('stocks')" class="text-xs text-rose-600 hover:underline">Clear Stocks</button>
@@ -140,27 +146,30 @@
     <form onsubmit="addStock(event)" class="grid grid-cols-2 md:grid-cols-7 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
       <input type="text" id="stSym" placeholder="Symbol (AAPL)" required class="border rounded px-2 py-1.5" />
       <input type="text" id="stName" placeholder="Asset Name" required class="border rounded px-2 py-1.5" />
-      <input type="number" step="any" id="stShares" placeholder="Shares" required class="border rounded px-2 py-1.5" />
-      <input type="number" step="any" id="stBuy" placeholder="Buy Price" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="stShares" placeholder="Shares Purchased" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="stBuy" placeholder="Purchase Price" required class="border rounded px-2 py-1.5" />
       <input type="number" step="any" id="stCurrPrice" placeholder="Current Price" required class="border rounded px-2 py-1.5" />
       <select id="stCurr" class="border rounded px-2 py-1.5"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
-      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Add Stock</button>
+      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Add Stock Lot</button>
     </form>
     <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+        <h3 class="font-bold text-slate-800 text-sm">Top 5 Stock Holdings by Total Value</h3>
+      </div>
       <table class="w-full text-left text-sm">
         <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
-          <tr><th class="p-3">Symbol</th><th class="p-3">Name</th><th class="p-3">Shares</th><th class="p-3">Buy Price</th><th class="p-3">Current Price</th><th class="p-3">Total Value</th><th class="p-3">Gain/Loss</th><th class="p-3"></th></tr>
+          <tr><th class="p-3">Symbol</th><th class="p-3">Name</th><th class="p-3">Total Shares</th><th class="p-3">Blended Avg Buy Price</th><th class="p-3">Current Price</th><th class="p-3">Total Value</th><th class="p-3">Unrealized Gain/Loss</th><th class="p-3"></th></tr>
         </thead>
         <tbody id="stocksTable" class="divide-y divide-slate-100"></tbody>
       </table>
     </div>
 
-    <!-- Time-Series & Forecasting Engine -->
+    <!-- Time-Series & Forecasting Engine with Chart -->
     <div class="bg-white p-5 rounded-xl border border-slate-200 space-y-4">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 border-b border-slate-100 pb-4">
         <div>
-          <h2 class="text-lg font-bold text-slate-800">Time-Series Predictive Engine (CAGR & Monte Carlo)</h2>
-          <p class="text-xs text-slate-500">Upload historical prices (Date, Symbol, Price, Currency) for accurate annualized returns and volatility.</p>
+          <h2 class="text-lg font-bold text-slate-800">Time-Series Trends & Predictive Engine (CAGR & Monte Carlo)</h2>
+          <p class="text-xs text-slate-500">Upload historical prices (Date, Symbol, Price, Currency) to view visual price trends and accurate projections.</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button onclick="downloadTemplate('history', 'xlsx')" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded-lg font-medium">History Excel Template</button>
@@ -171,6 +180,15 @@
           <button onclick="clearSection('history')" class="text-xs text-rose-600 hover:underline">Clear History</button>
         </div>
       </div>
+
+      <!-- Visual Graph Canvas Container -->
+      <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <h3 class="text-sm font-semibold text-slate-700 mb-2">Historical Price Trends Graph</h3>
+        <div class="relative h-72 w-full">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+
       <div class="flex flex-wrap items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm">
         <div class="flex items-center gap-2"><label class="font-medium text-slate-600">Horizon (Years):</label><input type="number" id="forecastYears" value="10" min="1" max="50" onchange="renderForecast()" class="border rounded px-2 py-1 w-20 bg-white" /></div>
         <div class="flex items-center gap-2"><label class="font-medium text-slate-600">Fallback Return (%):</label><input type="number" step="0.5" id="fallbackReturn" value="8" onchange="renderForecast()" class="border rounded px-2 py-1 w-20 bg-white" /></div>
@@ -185,6 +203,37 @@
           <tbody id="forecastTable" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
+    </div>
+  </section>
+
+  <!-- STOCKS SOLD & REALIZED GAINS SECTION -->
+  <section id="sec-sold" class="hidden space-y-4">
+    <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
+      <div class="flex flex-wrap gap-2">
+        <button onclick="downloadTemplate('sold', 'xlsx')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Sold Stocks Excel Template</button>
+        <button onclick="downloadTemplate('sold', 'csv')" class="bg-slate-600 hover:bg-slate-700 text-white text-xs px-3 py-2 rounded-lg font-medium">Sold Stocks CSV Template</button>
+        <label class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-2 rounded-lg font-medium cursor-pointer">
+          Upload Sold Stocks <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'sold')" class="hidden" />
+        </label>
+      </div>
+      <button onclick="clearSection('sold')" class="text-xs text-rose-600 hover:underline">Clear Sold Ledger</button>
+    </div>
+    <form onsubmit="addSoldStock(event)" class="grid grid-cols-2 md:grid-cols-7 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
+      <input type="date" id="sdDate" required class="border rounded px-2 py-1.5" />
+      <input type="text" id="sdSym" placeholder="Symbol (AAPL)" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="sdShares" placeholder="Shares Sold" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="sdBuy" placeholder="Avg Cost / Share" required class="border rounded px-2 py-1.5" />
+      <input type="number" step="any" id="sdSell" placeholder="Sell Price / Share" required class="border rounded px-2 py-1.5" />
+      <select id="sdCurr" class="border rounded px-2 py-1.5"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GHS">GHS</option><option value="HUF">HUF</option></select>
+      <button type="submit" class="bg-slate-800 text-white rounded px-3 py-1.5 font-medium hover:bg-slate-700">Record Sale</button>
+    </form>
+    <div class="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+          <tr><th class="p-3">Date Sold</th><th class="p-3">Symbol</th><th class="p-3">Shares Sold</th><th class="p-3">Cost Basis</th><th class="p-3">Proceeds</th><th class="p-3">Realized Gain/Loss</th><th class="p-3"></th></tr>
+        </thead>
+        <tbody id="soldTable" class="divide-y divide-slate-100"></tbody>
+      </table>
     </div>
   </section>
 
@@ -285,10 +334,11 @@
 
   <script>
     let fxRates = JSON.parse(localStorage.getItem('fxRates')) || { USD: 1, EUR: 0.92, GHS: 15.80, HUF: 375.00 };
-    let state = JSON.parse(localStorage.getItem('financeTrackerState')) || { spending: [], stocks: [], funds: [], startups: [], pensions: [], history: [] };
-    ['spending', 'stocks', 'funds', 'startups', 'pensions', 'history'].forEach(k => { if (!state[k]) state[k] = []; });
+    let state = JSON.parse(localStorage.getItem('financeTrackerState')) || { spending: [], stocks: [], sold: [], funds: [], startups: [], pensions: [], history: [] };
+    ['spending', 'stocks', 'sold', 'funds', 'startups', 'pensions', 'history'].forEach(k => { if (!state[k]) state[k] = []; });
 
     const symbols = { USD: '$', EUR: '€', GHS: '₵', HUF: 'Ft ' };
+    let historyChartInstance = null;
 
     function saveState() {
       localStorage.setItem('financeTrackerState', JSON.stringify(state));
@@ -327,12 +377,35 @@
     }
 
     function switchTab(tab) {
-      ['spending', 'stocks', 'funds', 'startups', 'pensions'].forEach(t => {
+      ['spending', 'stocks', 'sold', 'funds', 'startups', 'pensions'].forEach(t => {
         document.getElementById(`sec-${t}`).classList.toggle('hidden', t !== tab);
         const btn = document.getElementById(`tab-${t}`);
         btn.classList.toggle('tab-active', t === tab);
         btn.classList.toggle('text-slate-500', t !== tab);
       });
+      if (tab === 'stocks') {
+        setTimeout(renderChart, 50);
+      }
+    }
+
+    function getAggregatedStocks() {
+      const map = {};
+      state.stocks.forEach(item => {
+        const sym = (item.Symbol || '').toUpperCase();
+        if (!map[sym]) {
+          map[sym] = { Symbol: sym, Name: item.Name || sym, Shares: 0, TotalCost: 0, CurrentPrice: Number(item.CurrentPrice) || 0, Currency: item.Currency || 'USD' };
+        }
+        const shares = Number(item.Shares) || 0;
+        const buyPrice = Number(item.BuyPrice) || 0;
+        map[sym].Shares += shares;
+        map[sym].TotalCost += shares * buyPrice;
+        if (Number(item.CurrentPrice)) map[sym].CurrentPrice = Number(item.CurrentPrice);
+      });
+      return Object.values(map).map(st => ({
+        ...st,
+        AvgBuyPrice: st.Shares > 0 ? st.TotalCost / st.Shares : 0,
+        TotalValue: st.Shares * st.CurrentPrice
+      }));
     }
 
     function addSpending(e) {
@@ -344,6 +417,12 @@
     function addStock(e) {
       e.preventDefault();
       state.stocks.push({ Symbol: document.getElementById('stSym').value.trim().toUpperCase(), Name: document.getElementById('stName').value, Shares: parseFloat(document.getElementById('stShares').value), BuyPrice: parseFloat(document.getElementById('stBuy').value), CurrentPrice: parseFloat(document.getElementById('stCurrPrice').value), Currency: document.getElementById('stCurr').value });
+      e.target.reset(); saveState(); renderAll();
+    }
+
+    function addSoldStock(e) {
+      e.preventDefault();
+      state.sold.push({ Date: document.getElementById('sdDate').value, Symbol: document.getElementById('sdSym').value.trim().toUpperCase(), Shares: parseFloat(document.getElementById('sdShares').value), BuyPrice: parseFloat(document.getElementById('sdBuy').value), SellPrice: parseFloat(document.getElementById('sdSell').value), Currency: document.getElementById('sdCurr').value });
       e.target.reset(); saveState(); renderAll();
     }
 
@@ -372,6 +451,7 @@
       const templates = {
         spending: [{ Date: '2026-11-14', Description: 'Groceries', Category: 'Food', Amount: 85.50, Currency: 'USD' }],
         stocks: [{ Symbol: 'VOO', Name: 'Vanguard S&P 500', Shares: 10, BuyPrice: 450, CurrentPrice: 510, Currency: 'USD' }],
+        sold: [{ Date: '2026-10-01', Symbol: 'AAPL', Shares: 5, BuyPrice: 150, SellPrice: 220, Currency: 'USD' }],
         funds: [{ Name: 'Vanguard US Gov Money Market', Type: 'Money Market', Units: 1500, Nav: 1.00, Yield: 4.8, Currency: 'USD' }],
         startups: [{ Name: 'TechSeed Ventures', Stage: 'Seed', Shares: 5000, CostBasis: 1.20, CurrentValuation: 2.50, Currency: 'USD' }],
         pensions: [{ Name: 'Workplace Pension', Balance: 25000, MonthlyContribution: 400, EmployerMatch: 50, GrowthRate: 7, AnnualFee: 0.5, YearsToRetire: 25, Currency: 'EUR' }],
@@ -438,6 +518,59 @@
       return { meanAvg: startVal * Math.pow(1 + mu, years), p10: results[Math.floor(paths * 0.10)], p50: results[Math.floor(paths * 0.50)], p90: results[Math.floor(paths * 0.90)] };
     }
 
+    function renderChart() {
+      const ctx = document.getElementById('historyChart');
+      if (!ctx) return;
+
+      const dateSet = new Set();
+      state.history.forEach(h => { if (h.Date) dateSet.add(h.Date); });
+      const labels = Array.from(dateSet).sort();
+
+      const symbolMap = {};
+      state.history.forEach(h => {
+        const sym = (h.Symbol || '').toUpperCase();
+        if (!sym) return;
+        if (!symbolMap[sym]) symbolMap[sym] = {};
+        symbolMap[sym][h.Date] = Number(h.Price) || 0;
+      });
+
+      const symbolsList = Object.keys(symbolMap);
+      const colorPalette = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+      const datasets = symbolsList.map((sym, idx) => {
+        const data = labels.map(date => symbolMap[sym][date] || null);
+        const color = colorPalette[idx % colorPalette.length];
+        return {
+          label: sym,
+          data: data,
+          borderColor: color,
+          backgroundColor: color,
+          tension: 0.2,
+          spanGaps: true
+        };
+      });
+
+      if (historyChartInstance) {
+        historyChartInstance.destroy();
+      }
+
+      historyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' }
+          },
+          scales: {
+            y: { beginAtZero: false, grid: { color: '#e2e8f0' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    }
+
     function renderForecast() {
       const base = document.getElementById('baseCurrency').value;
       const years = parseFloat(document.getElementById('forecastYears').value) || 10;
@@ -447,9 +580,11 @@
       tbody.innerHTML = '';
 
       let aggMean = 0, aggP10 = 0, aggP50 = 0, aggP90 = 0;
-      state.stocks.forEach(item => {
-        const sym = (item.Symbol || '').toUpperCase();
-        const valBase = convert(Number(item.Shares) * Number(item.CurrentPrice), item.Currency || 'USD', base);
+      const aggStocks = getAggregatedStocks();
+
+      aggStocks.forEach(item => {
+        const sym = item.Symbol;
+        const valBase = convert(item.TotalValue, item.Currency, base);
         const stats = getTimeSeriesStats(sym);
         const mu = stats ? stats.cagr : fallbackMu;
         const sigma = stats ? stats.volatility : fallbackSigma;
@@ -488,16 +623,48 @@
       });
       document.getElementById('totalSpendingDisplay').textContent = formatMoney(totalSp, base);
 
-      // Stocks
+      // Stocks (Top 5 Holdings by Converted Total Value)
       let totalStocks = 0;
       const stBody = document.getElementById('stocksTable'); stBody.innerHTML = '';
-      state.stocks.forEach((item, idx) => {
-        const valOrig = Number(item.Shares) * Number(item.CurrentPrice);
-        const gainConv = convert(valOrig - (Number(item.Shares) * Number(item.BuyPrice)), item.Currency, base);
-        const valConv = convert(valOrig, item.Currency, base); totalStocks += valConv;
-        stBody.innerHTML += `<tr><td class="p-3 font-bold">${item.Symbol}</td><td class="p-3">${item.Name}</td><td class="p-3">${item.Shares}</td><td class="p-3">${formatMoney(item.BuyPrice, item.Currency)}</td><td class="p-3">${formatMoney(item.CurrentPrice, item.Currency)}</td><td class="p-3 font-semibold">${formatMoney(valConv, base)}</td><td class="p-3 font-semibold ${gainConv >= 0 ? 'text-emerald-600' : 'text-rose-600'}">${gainConv >= 0 ? '+' : ''}${formatMoney(gainConv, base)}</td><td class="p-3 text-right"><button onclick="deleteItem('stocks', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
+      const aggStocks = getAggregatedStocks();
+      
+      // Calculate converted value for sorting
+      aggStocks.forEach(st => {
+        st.convertedVal = convert(st.TotalValue, st.Currency, base);
+        totalStocks += st.convertedVal;
       });
+
+      // Sort descending by value and take top 5
+      const top5Stocks = aggStocks.sort((a, b) => b.convertedVal - a.convertedVal).slice(0, 5);
+
+      if (top5Stocks.length === 0) {
+        stBody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400 text-sm">No stock holdings recorded yet.</td></tr>`;
+      } else {
+        top5Stocks.forEach((item) => {
+          const totalCostOrig = item.Shares * item.AvgBuyPrice;
+          const gainConv = convert(item.TotalValue - totalCostOrig, item.Currency, base);
+          const gainClass = gainConv >= 0 ? 'text-emerald-600' : 'text-rose-600';
+          stBody.innerHTML += `<tr><td class="p-3 font-bold">${item.Symbol}</td><td class="p-3">${item.Name}</td><td class="p-3">${item.Shares}</td><td class="p-3">${formatMoney(item.AvgBuyPrice, item.Currency)}</td><td class="p-3">${formatMoney(item.CurrentPrice, item.Currency)}</td><td class="p-3 font-semibold">${formatMoney(item.convertedVal, base)}</td><td class="p-3 font-semibold ${gainClass}">${gainConv >= 0 ? '+' : ''}${formatMoney(gainConv, base)}</td><td class="p-3 text-slate-400 text-xs">Top 5</td></tr>`;
+        });
+      }
       document.getElementById('totalStocksDisplay').textContent = formatMoney(totalStocks, base);
+
+      // Stocks Sold & Realized Gains
+      let totalRealized = 0;
+      const soldBody = document.getElementById('soldTable'); soldBody.innerHTML = '';
+      state.sold.forEach((item, idx) => {
+        const shares = Number(item.Shares) || 0;
+        const buyPrice = Number(item.BuyPrice) || 0;
+        const sellPrice = Number(item.SellPrice) || 0;
+        const costOrig = shares * buyPrice;
+        const proceedsOrig = shares * sellPrice;
+        const gainOrig = proceedsOrig - costOrig;
+        const gainConv = convert(gainOrig, item.Currency, base);
+        totalRealized += gainConv;
+        const gainClass = gainConv >= 0 ? 'text-emerald-600' : 'text-rose-600';
+        soldBody.innerHTML += `<tr><td class="p-3">${item.Date}</td><td class="p-3 font-bold">${item.Symbol}</td><td class="p-3">${shares}</td><td class="p-3">${formatMoney(costOrig, item.Currency)}</td><td class="p-3">${formatMoney(proceedsOrig, item.Currency)}</td><td class="p-3 font-semibold ${gainClass}">${gainConv >= 0 ? '+' : ''}${formatMoney(gainConv, base)}</td><td class="p-3 text-right"><button onclick="deleteItem('sold', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
+      });
+      document.getElementById('totalRealizedDisplay').textContent = formatMoney(totalRealized, base);
 
       // Funds & Bonds
       let totalFunds = 0;
@@ -537,6 +704,7 @@
       document.getElementById('totalPensionsDisplay').textContent = formatMoney(totalPen, base);
 
       renderForecast();
+      renderChart();
     }
 
     renderAll();
