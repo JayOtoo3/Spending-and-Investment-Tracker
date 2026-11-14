@@ -18,7 +18,7 @@
   <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 bg-white p-5 rounded-xl shadow-sm border border-slate-200">
     <div>
       <h1 class="text-2xl font-bold text-slate-800">Multi-Currency Finance & Asset Tracker</h1>
-      <p class="text-sm text-slate-500">Spending, Top Stocks, Realized Gains, Funds, Startups, Pensions & Visual Charts</p>
+      <p class="text-sm text-slate-500">Spending, Holdings Export, Realized Gains, Funds, Startups, Pensions & Visual Charts</p>
     </div>
     <div class="flex flex-wrap items-center gap-3">
       <label class="text-sm font-medium text-slate-600">Display Currency:</label>
@@ -34,19 +34,19 @@
     </div>
   </header>
 
-  <!-- Summary Cards -->
-  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+  <!-- Summary Cards (Includes Total Investments Sum) -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4 mb-6">
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
       <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Spending</p>
       <p id="totalSpendingDisplay" class="text-xl font-bold text-rose-600 mt-1">$0.00</p>
     </div>
+    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 sm:col-span-2 bg-slate-900 text-white">
+      <p class="text-xs uppercase tracking-wider text-slate-300 font-semibold">Total Investments Sum</p>
+      <p id="totalInvestmentsDisplay" class="text-2xl font-extrabold text-emerald-400 mt-1">$0.00</p>
+    </div>
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
       <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Active Stocks</p>
       <p id="totalStocksDisplay" class="text-xl font-bold text-emerald-600 mt-1">$0.00</p>
-    </div>
-    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-      <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Realized Gains (Sold)</p>
-      <p id="totalRealizedDisplay" class="text-xl font-bold text-amber-600 mt-1">$0.00</p>
     </div>
     <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
       <p class="text-xs uppercase tracking-wider text-slate-500 font-semibold">MM, Bonds & Funds</p>
@@ -131,7 +131,7 @@
     </div>
   </section>
 
-  <!-- STOCKS & FORECAST SECTION (Displays Top 5 Holdings) -->
+  <!-- STOCKS & FORECAST SECTION -->
   <section id="sec-stocks" class="hidden space-y-6">
     <div class="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-slate-200">
       <div class="flex flex-wrap gap-2">
@@ -141,7 +141,12 @@
           Upload Stocks (DCA Batches) <input type="file" accept=".xlsx,.xls,.csv" onchange="handleUpload(event, 'stocks')" class="hidden" />
         </label>
       </div>
-      <button onclick="clearSection('stocks')" class="text-xs text-rose-600 hover:underline">Clear Stocks</button>
+      <div class="flex flex-wrap gap-2">
+        <button onclick="exportCurrentHoldings()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-2 rounded-lg font-medium flex items-center gap-1.5">
+          📥 Download Current Holdings (Excel)
+        </button>
+        <button onclick="clearSection('stocks')" class="text-xs text-rose-600 hover:underline">Clear Stocks</button>
+      </div>
     </div>
     <form onsubmit="addStock(event)" class="grid grid-cols-2 md:grid-cols-7 gap-2 bg-white p-4 rounded-xl border border-slate-200 text-sm">
       <input type="text" id="stSym" placeholder="Symbol (AAPL)" required class="border rounded px-2 py-1.5" />
@@ -408,6 +413,28 @@
       }));
     }
 
+    // Export Current Holdings to Excel
+    function exportCurrentHoldings() {
+      const aggStocks = getAggregatedStocks();
+      const exportData = aggStocks.map(s => ({
+        Symbol: s.Symbol,
+        Name: s.Name,
+        TotalShares: s.Shares,
+        BlendedAvgBuyPrice: s.AvgBuyPrice,
+        CurrentPrice: s.CurrentPrice,
+        TotalValue: s.TotalValue,
+        Currency: s.Currency
+      }));
+      if (exportData.length === 0) {
+        alert("No stock holdings to export.");
+        return;
+      }
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Current_Holdings");
+      XLSX.writeFile(wb, `current_holdings_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
     function addSpending(e) {
       e.preventDefault();
       state.spending.push({ Date: document.getElementById('spDate').value, Description: document.getElementById('spDesc').value, Category: document.getElementById('spCat').value, Amount: parseFloat(document.getElementById('spAmt').value), Currency: document.getElementById('spCurr').value });
@@ -623,18 +650,16 @@
       });
       document.getElementById('totalSpendingDisplay').textContent = formatMoney(totalSp, base);
 
-      // Stocks (Top 5 Holdings by Converted Total Value)
+      // Stocks (Top 5 Holdings)
       let totalStocks = 0;
       const stBody = document.getElementById('stocksTable'); stBody.innerHTML = '';
       const aggStocks = getAggregatedStocks();
       
-      // Calculate converted value for sorting
       aggStocks.forEach(st => {
         st.convertedVal = convert(st.TotalValue, st.Currency, base);
         totalStocks += st.convertedVal;
       });
 
-      // Sort descending by value and take top 5
       const top5Stocks = aggStocks.sort((a, b) => b.convertedVal - a.convertedVal).slice(0, 5);
 
       if (top5Stocks.length === 0) {
@@ -702,6 +727,10 @@
         penBody.innerHTML += `<tr><td class="p-3 font-medium">${item.Name}</td><td class="p-3">${formatMoney(bal, item.Currency)} (${formatMoney(balConv, base)})</td><td class="p-3">${formatMoney(monthly, item.Currency)}/mo</td><td class="p-3">${(netRate * 100).toFixed(2)}%</td><td class="p-3">${years} yrs</td><td class="p-3 font-semibold text-blue-600">${formatMoney(convert(projOrig, item.Currency, base), base)}</td><td class="p-3 text-right"><button onclick="deleteItem('pensions', ${idx})" class="text-rose-500 text-xs">Delete</button></td></tr>`;
       });
       document.getElementById('totalPensionsDisplay').textContent = formatMoney(totalPen, base);
+
+      // Calculate and display grand sum total of all investments (Stocks + Funds + Startups + Pensions)
+      const grandTotalInvestments = totalStocks + totalFunds + totalStartups + totalPen;
+      document.getElementById('totalInvestmentsDisplay').textContent = formatMoney(grandTotalInvestments, base);
 
       renderForecast();
       renderChart();
